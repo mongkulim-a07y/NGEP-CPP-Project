@@ -19,7 +19,7 @@ class CategoryMananger {
 
     //Save categories to file
     void saveCategories(){
-        ofstream file("categories.txt");
+        ofstream file("CsvFile/categories.txt");
         for(string name: categories){
             file << name << endl;
         }
@@ -113,9 +113,13 @@ class CategoryMananger {
     }
     // Load categories from file
     void loadCategories(){
-        ifstream file("categories.txt");
+        ifstream file("CsvFile/categories.txt");
         string name;
-
+        
+        if (!file.is_open()){
+            cout << "error";
+            return;
+        }
         while(getline(file, name)){
             categories.push_back(name);
         }

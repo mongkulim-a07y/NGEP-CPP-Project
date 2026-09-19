@@ -109,7 +109,8 @@ void viewProducts()
 // stop character, instead of the default newline. Same getline() you
 // already use, just told to stop early.
 void loadProducts() {
-    ifstream in("product.csv");
+    ifstream in;
+    in.open("CsvFile/product.csv");
     if (!in.is_open()) {
         return; // no file yet, nothing to load
     }
@@ -158,7 +159,8 @@ void loadProducts() {
 
 void saveProducts()
 {
-    ofstream out("product.csv");
+    ofstream out;
+    out.open("CsvFile/product.csv");
     if (!out.is_open())
     {
         cout << "Could not open file to save." << endl;
@@ -183,16 +185,38 @@ void saveProducts()
 }
 
 // ---------------- SORTING (Bubble Sort) ----------------
-void sortByPrice() {
-    if (head == nullptr) return;
+void sortByPrice() 
+{
+    if (head == nullptr)
+    {
+        cout << "No products to display.\n";
+        return;
+    }
 
+    // 1. Create a deep copy of the original linked list
+    ProductNode *tempHead = new ProductNode{head->data, nullptr};
+    ProductNode *tempTail = tempHead;
+    ProductNode *originalCurrent = head->next;
+
+    while (originalCurrent != nullptr)
+    {
+        tempTail->next = new ProductNode{originalCurrent->data, nullptr};
+        tempTail = tempTail->next;
+        originalCurrent = originalCurrent->next;
+    }
+
+    // 2. Sort the temporary list using Bubble Sort
     bool swapped = true;
-    while (swapped == true) {
+    while (swapped)
+    {
         swapped = false;
-        ProductNode* current = head;
-        while (current->next != nullptr) {
-            if (current->data.price > current->next->data.price) {
-                // swap the data of the two nodes
+        ProductNode *current = tempHead;
+
+        while (current != nullptr && current->next != nullptr)
+        {
+            if (current->data.price > current->next->data.price)
+            {
+                // Swap payload data on the temporary list only
                 Product temp = current->data;
                 current->data = current->next->data;
                 current->next->data = temp;
@@ -201,6 +225,35 @@ void sortByPrice() {
             current = current->next;
         }
     }
+    cout << "\n===============================================================================\n";
+    cout << left
+         << setw(8) << "ID"
+         << setw(25) << "Name"
+         << setw(15) << "Category ID"
+         << setw(15) << "Price"
+         << setw(10) << "Stock" << "\n";
+    cout << "-------------------------------------------------------------------------------\n";
+
+    ProductNode *current = tempHead;
+    while (current != nullptr)
+    {
+        cout << left
+             << setw(8) << current->data.id
+             << setw(25) << current->data.name
+             << setw(15) << current->data.categoryId
+             << "$" << setw(14) << fixed << setprecision(2) << current->data.price
+             << setw(10) << current->data.stock << "\n";
+        current = current->next;
+    }
+    cout << "\n===============================================================================\n";
+
+    while (tempHead != nullptr)
+    {
+        ProductNode *toDelete = tempHead;
+        tempHead = tempHead->next;
+        delete toDelete;
+    }
+
     cout << "Products sorted by price." << endl;
 }
 

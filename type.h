@@ -6,6 +6,7 @@ using namespace std;
 struct Category {
     int id;
     string name;
+    string description;
 };
 
 struct Product {

@@ -7,43 +7,58 @@
 #include "product.h"
 #include "category.h"
 #include "order.h"
+#include "categoryt.hpp"
 
 using namespace std;
 
-void clearInput() {
+void clearInput()
+{
     cin.clear();
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
-int getIntInput(const string& prompt) {
+int getIntInput(const string &prompt)
+{
     int val;
-    while (true) {
+    while (true)
+    {
         cout << prompt;
-        if (cin >> val) return val;
+        if (cin >> val)
+        {
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Clear trailing newline
+            return val;
+        }
         clearInput();
         cout << "Invalid input. Please enter a number.\n";
     }
 }
 
-double getDoubleInput(const string& prompt) {
+double getDoubleInput(const string &prompt)
+{
     double val;
-    while (true) {
+    while (true)
+    {
         cout << prompt;
-        if (cin >> val) return val;
+        if (cin >> val)
+        {
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Clear trailing newline
+            return val;
+        }
         clearInput();
         cout << "Invalid input. Please enter a number.\n";
     }
 }
 
-string getStringInput(const string& prompt) {
+string getStringInput(const string &prompt)
+{
     string str;
     cout << prompt;
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
     getline(cin, str);
     return str;
 }
 
-void promptAddProduct() {
+void promptAddProduct()
+{
     string name = getStringInput("Enter Product Name: ");
     int categoryId = getIntInput("Enter Category ID: ");
     double price = getDoubleInput("Enter Price: ");
@@ -52,7 +67,8 @@ void promptAddProduct() {
     saveProducts();
 }
 
-void promptEditProduct() {
+void promptEditProduct()
+{
     int id = getIntInput("Enter Product ID to edit: ");
     string name = getStringInput("Enter New Name: ");
     int categoryId = getIntInput("Enter New Category ID: ");
@@ -62,17 +78,49 @@ void promptEditProduct() {
     saveProducts();
 }
 
-void promptDeleteProduct() {
+void promptDeleteProduct()
+{
     int id = getIntInput("Enter Product ID to delete: ");
     deleteProduct(id);
     saveProducts();
 }
 
-void runOwnerMenu(CustomerList& customerApp, CategoryMananger& categoryApp, OrderList& orderApp) {
+void promptAddCategory(CategoryList &category)
+{
+    // Auto-generate ID based on current list size/count
+    int id = category.getCategoryCount() + 1;
+
+    cout << "Generated Category ID: " << id << "\n";
+    string name = getStringInput("Enter Category Name: ");
+    string desc = getStringInput("Enter Category Description: ");
+
+    category.addCategory(id, name, desc);
+    category.saveCategories();
+}
+
+void promptEditCategory(CategoryList &category)
+{
+    int id = getIntInput("Enter Category ID to edit: ");
+    string name = getStringInput("Enter New Category Name: ");
+    string desc = getStringInput("Enter New Category Description: ");
+    category.editCategory(id, name, desc);
+    category.saveCategories();
+}
+
+void promptDeleteCategory(CategoryList &category)
+{
+    int id = getIntInput("Enter Category ID to delete: ");
+    category.deleteCategory(id);
+    category.saveCategories();
+}
+
+void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+{
     int choice;
-    do {
+    do
+    {
         cout << "\n==================================================\n";
-        cout << "                   OWNER MENU                    \n";
+        cout << "                  OWNER MENU                      \n";
         cout << "==================================================\n";
         cout << "  Category\n";
         cout << "  1. View Categories\n";
@@ -98,42 +146,77 @@ void runOwnerMenu(CustomerList& customerApp, CategoryMananger& categoryApp, Orde
         cout << "--------------------------------------------------\n";
         choice = getIntInput("Choose (0-16): ");
 
-        switch (choice) {
-            case 1:  categoryApp.viewCategories(); break;
-            case 2:  categoryApp.addCategory(); break;
-            case 3:  categoryApp.editCategory(); break;
-            case 4:  categoryApp.deleteCategory(); break;
-            case 5:  viewProducts(); break;
-            case 6:  promptAddProduct(); break;
-            case 7:  promptEditProduct(); break;
-            case 8:  promptDeleteProduct(); break;
-            case 9:  sortByPrice(); viewProducts(); break;
-            case 10: customerApp.viewCustomers(); break;
-            case 11: customerApp.addCustomer(); break;
-            case 12: customerApp.editCustomer(); break;
-            case 13: customerApp.deleteCustomer(); break;
-            case 14: orderApp.viewAllOrders(); break;
-            case 15: {
-                int cid = getIntInput("Enter Customer ID: ");
-                orderApp.viewOrdersByCustomer(cid);
-                break;
-            }
-            case 16: {
-                int cid = getIntInput("Enter Customer ID: ");
-                orderApp.placeOrder(cid);
-                break;
-            }
-            case 0: break;
-            default: cout << "Invalid choice.\n";
+        switch (choice)
+        {
+        case 1:
+            category.viewCategories();
+            break;
+        case 2:
+            promptAddCategory(category);
+            break;
+        case 3:
+            promptEditCategory(category);
+            break;
+        case 4:
+            promptDeleteCategory(category);
+            break;
+        case 5:
+            viewProducts();
+            break;
+        case 6:
+            promptAddProduct();
+            break;
+        case 7:
+            promptEditProduct();
+            break;
+        case 8:
+            promptDeleteProduct();
+            break;
+        case 9:
+            sortByPrice();
+            break;
+        case 10:
+            customerApp.viewCustomers();
+            break;
+        case 11:
+            customerApp.addCustomer();
+            break;
+        case 12:
+            customerApp.editCustomer();
+            break;
+        case 13:
+            customerApp.deleteCustomer();
+            break;
+        case 14:
+            orderApp.viewAllOrders();
+            break;
+        case 15:
+        {
+            int cid = getIntInput("Enter Customer ID: ");
+            orderApp.viewOrdersByCustomer(cid);
+            break;
+        }
+        case 16:
+        {
+            int cid = getIntInput("Enter Customer ID: ");
+            orderApp.placeOrder(cid);
+            break;
+        }
+        case 0:
+            break;
+        default:
+            cout << "Invalid choice.\n";
         }
     } while (choice != 0);
 }
 
-void runEmployeeMenu(CustomerList& customerApp, CategoryMananger& categoryApp, OrderList& orderApp) {
+void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+{
     int choice;
-    do {
+    do
+    {
         cout << "\n==================================================\n";
-        cout << "                 EMPLOYEE MENU                   \n";
+        cout << "                 EMPLOYEE MENU                    \n";
         cout << "==================================================\n";
         cout << " 1. View Products\n";
         cout << " 2. Sort Products by Price\n";
@@ -150,37 +233,62 @@ void runEmployeeMenu(CustomerList& customerApp, CategoryMananger& categoryApp, O
         cout << "--------------------------------------------------\n";
         choice = getIntInput("Choose (0-11): ");
 
-        switch (choice) {
-            case 1:  viewProducts(); break;
-            case 2:  sortByPrice(); viewProducts(); break;
-            case 3:  promptAddProduct(); break;
-            case 4:  promptEditProduct(); break;
-            case 5:  categoryApp.viewCategories(); break;
-            case 6:  customerApp.viewCustomers(); break;
-            case 7:  customerApp.addCustomer(); break;
-            case 8:  customerApp.editCustomer(); break;
-            case 9: {
-                int cid = getIntInput("Enter Customer ID: ");
-                orderApp.placeOrder(cid);
-                break;
-            }
-            case 10: orderApp.viewAllOrders(); break;
-            case 11: {
-                int cid = getIntInput("Enter Customer ID: ");
-                orderApp.viewOrdersByCustomer(cid);
-                break;
-            }
-            case 0: break;
-            default: cout << "Invalid choice.\n";
+        switch (choice)
+        {
+        case 1:
+            viewProducts();
+            break;
+        case 2:
+            sortByPrice();
+            break;
+        case 3:
+            promptAddProduct();
+            break;
+        case 4:
+            promptEditProduct();
+            break;
+        case 5:
+            category.viewCategories();
+            break;
+        case 6:
+            customerApp.viewCustomers();
+            break;
+        case 7:
+            customerApp.addCustomer();
+            break;
+        case 8:
+            customerApp.editCustomer();
+            break;
+        case 9:
+        {
+            int cid = getIntInput("Enter Customer ID: ");
+            orderApp.placeOrder(cid);
+            break;
+        }
+        case 10:
+            orderApp.viewAllOrders();
+            break;
+        case 11:
+        {
+            int cid = getIntInput("Enter Customer ID: ");
+            orderApp.viewOrdersByCustomer(cid);
+            break;
+        }
+        case 0:
+            break;
+        default:
+            cout << "Invalid choice.\n";
         }
     } while (choice != 0);
 }
 
-void runCustomerMenu(CustomerList& customerApp, CategoryMananger& categoryApp, OrderList& orderApp) {
+void runCustomerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+{
     int choice;
-    do {
+    do
+    {
         cout << "\n==================================================\n";
-        cout << "                 CUSTOMER MENU                   \n";
+        cout << "                 CUSTOMER MENU                    \n";
         cout << "==================================================\n";
         cout << " 1. View Products\n";
         cout << " 2. Sort Products by Price\n";
@@ -192,37 +300,53 @@ void runCustomerMenu(CustomerList& customerApp, CategoryMananger& categoryApp, O
         cout << "--------------------------------------------------\n";
         choice = getIntInput("Choose (0-6): ");
 
-        switch (choice) {
-            case 1: viewProducts(); break;
-            case 2: sortByPrice(); viewProducts(); break;
-            case 3: categoryApp.viewCategories(); break;
-            case 4: {
-                int cid = getIntInput("Enter Your Customer ID: ");
-                orderApp.placeOrder(cid);
-                break;
-            }
-            case 5: {
-                int cid = getIntInput("Enter Your Customer ID: ");
-                orderApp.viewOrdersByCustomer(cid);
-                break;
-            }
-            case 6: customerApp.addCustomer(); break;
-            case 0: break;
-            default: cout << "Invalid choice.\n";
+        switch (choice)
+        {
+        case 1:
+            viewProducts();
+            break;
+        case 2:
+            sortByPrice();
+            viewProducts();
+            break;
+        case 3:
+            category.viewCategories();
+            break;
+        case 4:
+        {
+            int cid = getIntInput("Enter Your Customer ID: ");
+            orderApp.placeOrder(cid);
+            break;
+        }
+        case 5:
+        {
+            int cid = getIntInput("Enter Your Customer ID: ");
+            orderApp.viewOrdersByCustomer(cid);
+            break;
+        }
+        case 6:
+            customerApp.addCustomer();
+            break;
+        case 0:
+            break;
+        default:
+            cout << "Invalid choice.\n";
         }
     } while (choice != 0);
-}
+} 
 
-int main() {
+int main()
+{
     CustomerList customerApp;
-    CategoryMananger categoryApp;
     OrderList orderApp;
+    CategoryList category;
     loadProducts();
 
     int choice;
-    do {
+    do
+    {
         cout << "\n==================================================\n";
-        cout << "          STORE MANAGEMENT SYSTEM          \n";
+        cout << "           STORE MANAGEMENT SYSTEM                \n";
         cout << "==================================================\n";
         cout << " 1. Owner\n";
         cout << " 2. Employee\n";
@@ -231,16 +355,24 @@ int main() {
         cout << "--------------------------------------------------\n";
         choice = getIntInput("Select Role (1-4): ");
 
-        switch (choice) {
-            case 1: runOwnerMenu(customerApp, categoryApp, orderApp); break;
-            case 2: runEmployeeMenu(customerApp, categoryApp, orderApp); break;
-            case 3: runCustomerMenu(customerApp, categoryApp, orderApp); break;
-            case 4:
-                saveProducts();
-                freeAllProducts();
-                cout << "Goodbye!\n";
-                break;
-            default: cout << "Invalid choice.\n";
+        switch (choice)
+        {
+        case 1:
+            runOwnerMenu(customerApp, category, orderApp);
+            break;
+        case 2:
+            runEmployeeMenu(customerApp, category, orderApp);
+            break;
+        case 3:
+            runCustomerMenu(customerApp, category, orderApp);
+            break;
+        case 4:
+            saveProducts();
+            freeAllProducts();
+            cout << "Goodbye!\n";
+            break;
+        default:
+            cout << "Invalid choice.\n";
         }
     } while (choice != 4);
 
