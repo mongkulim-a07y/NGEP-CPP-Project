@@ -1,5 +1,6 @@
 #include "product.h"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 using namespace std;
 
@@ -74,27 +75,6 @@ void deleteProduct(int id) {
 }
 
 // ---------------- READ ----------------
-void viewProducts() {
-    if (head == nullptr) {
-        cout << "No products yet." << endl;
-        return;
-    }
-
-    ProductNode* current = head;
-    while (current != nullptr) {
-        cout << "ID: " << current->data.id
-             << " | Name: " << current->data.name
-             << " | Category: " << current->data.categoryId
-             << " | Price: " << current->data.price
-             << " | Stock: " << current->data.stock << endl;
-        current = current->next;
-    }
-}
-
-// ---------------- PERSISTENCE (CSV format) ----------------
-// File format: one product per line, comma-separated, with a header row.
-//   id,name,categoryId,price,stock
-//   1,Keyboard,1,25.50,10
 void viewProducts()
 {
     if (head == nullptr)
@@ -174,6 +154,32 @@ void loadProducts() {
     }
 
     in.close();
+}
+
+void saveProducts()
+{
+    ofstream out("product.csv");
+    if (!out.is_open())
+    {
+        cout << "Could not open file to save." << endl;
+        return;
+    }
+
+    out << "id,name,categoryId,price,stock" << endl; // header row
+
+    ProductNode *current = head;
+    while (current != nullptr)
+    {
+        out << current->data.id << ","
+            << current->data.name << ","
+            << current->data.categoryId << ","
+            << current->data.price << ","
+            << current->data.stock << endl;
+        current = current->next;
+    }
+
+    out.close();
+    cout << "Products saved to product.csv" << endl;
 }
 
 // ---------------- SORTING (Bubble Sort) ----------------
