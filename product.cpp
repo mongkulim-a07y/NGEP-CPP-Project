@@ -95,27 +95,34 @@ void viewProducts() {
 // File format: one product per line, comma-separated, with a header row.
 //   id,name,categoryId,price,stock
 //   1,Keyboard,1,25.50,10
-void saveProducts() {
-    ofstream out("product.csv");
-    if (!out.is_open()) {
-        cout << "Could not open file to save." << endl;
+void viewProducts()
+{
+    if (head == nullptr)
+    {
+        cout << "\n[!] No products available in the inventory.\n"
+             << endl;
         return;
     }
-
-    out << "id,name,categoryId,price,stock" << endl; // header row
-
-    ProductNode* current = head;
-    while (current != nullptr) {
-        out << current->data.id << ","
-            << current->data.name << ","
-            << current->data.categoryId << ","
-            << current->data.price << ","
-            << current->data.stock << endl;
+    cout << "\n===============================================================================\n";
+    cout << left
+         << setw(8) << "ID"
+         << setw(25) << "Name"
+         << setw(15) << "Category ID"
+         << setw(15) << "Price"
+         << setw(10) << "Stock" << "\n";
+    cout << "-------------------------------------------------------------------------------\n";
+    ProductNode *current = head;
+    while (current != nullptr)
+    {
+        cout << left
+             << setw(8) << current->data.id
+             << setw(25) << current->data.name
+             << setw(15) << current->data.categoryId
+             << "$" << setw(14) << fixed << setprecision(2) << current->data.price
+             << setw(10) << current->data.stock << "\n";
         current = current->next;
     }
-
-    out.close();
-    cout << "Products saved to product.csv" << endl;
+    cout << "\n===============================================================================\n";
 }
 
 // Reads one CSV line field-by-field using getline with a comma as the
