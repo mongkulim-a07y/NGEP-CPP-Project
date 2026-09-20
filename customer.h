@@ -7,17 +7,57 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
-using namespace std ;
-class CustomerList {
-    private : 
-    struct CustomerNode {
-        Customer data ;
-        CustomerNode *next ;
-        CustomerNode(Customer value) : data(value),next(nullptr) {}
+using namespace std;
+
+// This class does NOT read from cin. All input-gathering (prompts) lives in
+// main.cpp (see promptAddCustomer / promptEditCustomer / promptDeleteCustomer),
+// same as CategoryList. That way this class can be reused, tested, or driven
+// by something other than a console (a GUI, a script, tests) without change,
+// and callers can validate things (like a duplicate username) BEFORE any
+// customer data gets created — which a prompt-inside-the-class couldn't do.
+class CustomerList
+{
+    // =====================================================================
+    // Data structure
+    // =====================================================================
+private:
+    struct CustomerNode
+    {
+        Customer data;
+        CustomerNode *next;
+        CustomerNode(Customer value) : data(value), next(nullptr) {}
     };
-    CustomerNode *head ;
-    CustomerNode *tail ;
-    public:
+
+    CustomerNode *head;
+    CustomerNode *tail;
+
+    // Single source of truth for the CSV path, so load/save can never
+    // accidentally point at two different files.
+    static constexpr const char *CSV_PATH = "CsvFile/customerList.csv";
+
+    // =====================================================================
+    // Private helpers
+    // =====================================================================
+
+    // Shared lookup used by findCustomer()/editCustomer()/deleteCustomer() so
+    // the list traversal logic lives in exactly one place.
+    CustomerNode *findNode(int id) const
+    {
+        CustomerNode *temp = head;
+        while (temp != nullptr)
+        {
+            if (temp->data.id == id)
+                return temp;
+            temp = temp->next;
+        }
+        return nullptr;
+    }
+
+public:
+    // =====================================================================
+    // Construction / destruction
+    // =====================================================================
+
     CustomerList() : head(nullptr), tail(nullptr)
     {
         loadCustomers();
@@ -27,6 +67,10 @@ class CustomerList {
     {
         freeMemory();
     }
+
+    // Prevent accidental copies (raw pointers would double-free otherwise)
+    CustomerList(const CustomerList &) = delete;
+    CustomerList &operator=(const CustomerList &) = delete;
 
     void freeMemory()
     {
@@ -40,14 +84,16 @@ class CustomerList {
         head = nullptr;
         tail = nullptr;
     }
+
+    // =====================================================================
+    // File I/O
+    // =====================================================================
+
     void loadCustomers()
     {
-        ifstream myFile;
-        myFile.open("customerList.csv");
+        ifstream myFile(CSV_PATH);
         if (!myFile.is_open())
-        {
             return;
-        }
 
         freeMemory();
         string line;
@@ -55,9 +101,7 @@ class CustomerList {
         while (getline(myFile, line))
         {
             if (line.empty())
-            {
                 continue;
-            }
 
             stringstream iss(line);
             string idStr, name, phone;
@@ -66,21 +110,31 @@ class CustomerList {
                 getline(iss, name, ',') &&
                 getline(iss, phone))
             {
-                Customer c;
-                c.id = stoi(idStr);
-                c.name = name;
-                c.phone = phone;
+                if (idStr == "ID" || idStr == "id")
+                    continue; // Skip CSV header row
 
-                CustomerNode *newNode = new CustomerNode(c);
-                if (head == nullptr)
+                try
                 {
-                    head = newNode;
-                    tail = newNode;
+                    Customer c;
+                    c.id = stoi(idStr);
+                    c.name = name;
+                    c.phone = phone;
+
+                    CustomerNode *newNode = new CustomerNode(c);
+                    if (head == nullptr)
+                    {
+                        head = newNode;
+                        tail = newNode;
+                    }
+                    else
+                    {
+                        tail->next = newNode;
+                        tail = newNode;
+                    }
                 }
-                else
+                catch (...)
                 {
-                    tail->next = newNode;
-                    tail = newNode;
+                    continue; // Skip malformed rows safely
                 }
             }
         }
@@ -89,64 +143,145 @@ class CustomerList {
 
     void saveCustomers()
     {
-        ofstream myFile;
-        myFile.open("customerList.csv");
-        if (!myFile.is_open()){
-            cout << "[Error] Failed to open customerList.csv\n";
+        ofstream myFile(CSV_PATH);
+        if (!myFile.is_open())
+        {
+            cout << "[Error] Failed to open " << CSV_PATH << "\n";
             return;
         }
+
+        myFile << "ID,Name,Phone\n"; // header row, same convention as categories.csv / users.csv
 
         CustomerNode *temp = head;
         while (temp != nullptr)
         {
-            myFile << temp->data.id << ',' 
-                   << temp->data.name << ',' 
+            myFile << temp->data.id << ','
+                   << temp->data.name << ','
                    << temp->data.phone << "\n";
             temp = temp->next;
         }
         myFile.close();
     }
-    void addCustomer(){
-        int newId = 1  ;
-        CustomerNode *temp = head ;
-        while (temp != nullptr ){
-            if (temp->data.id >= newId){
-                newId = temp->data.id + 1 ;
-            }
-             temp = temp->next ;
+
+    // =====================================================================
+    // ID management
+    // =====================================================================
+
+    // Predicts the ID that the NEXT addCustomer() call should use, without
+    // adding anything. The caller is responsible for actually passing this
+    // ID into addCustomer() — see promptAddCustomer() in main.cpp.
+    int getNextCustomerId() const
+    {
+        int newId = 1;
+        CustomerNode *temp = head;
+        while (temp != nullptr)
+        {
+            if (temp->data.id >= newId)
+                newId = temp->data.id + 1;
+            temp = temp->next;
         }
+        return newId;
+    }
 
-    string name , phone ;
-        cout << "\n--------------------------------------------------" << endl;
-        cout << setw(32) << "ADD NEW CUSTOMER" << endl;
-        cout << "--------------------------------------------------" << endl;
-        cout << "Generated Customer ID: " << newId << endl;
-        cin.ignore();
+    int getCustomerCount() const
+    {
+        int count = 0;
+        CustomerNode *temp = head;
+        while (temp != nullptr)
+        {
+            count++;
+            temp = temp->next;
+        }
+        return count;
+    }
 
-        cout<< "Enter  Customer Name: ";
-        getline(cin,name);
-        
-        cout <<"Enter Phone Number: ";
-        cin>>phone;
-        Customer c;
-        c.id = newId;
-        c.name = name;
-        c.phone = phone;
+    // =====================================================================
+    // Lookup
+    // =====================================================================
 
+    // Returns a pointer to the live customer record, or nullptr if not
+    // found. Lets callers (e.g. an "edit" prompt) show current details
+    // before asking for new ones.
+    Customer *findCustomer(int id) const
+    {
+        CustomerNode *node = findNode(id);
+        return node ? &node->data : nullptr;
+    }
+
+    // =====================================================================
+    // CRUD operations (pure data - no cin, no cout prompts)
+    // =====================================================================
+
+    // Adds a new customer with the given data and saves to disk.
+    // The caller supplies the id (typically from getNextCustomerId()).
+    void addCustomer(int id, const string &name, const string &phone)
+    {
+        Customer c{id, name, phone};
         CustomerNode *newNode = new CustomerNode(c);
 
-        if (head == nullptr){
+        if (head == nullptr)
+        {
             head = newNode;
             tail = newNode;
         }
-        else{
+        else
+        {
             tail->next = newNode;
             tail = newNode;
         }
-        cout << "[Success] Customer ID " << newId << " added successfully.\n";
+
         saveCustomers();
     }
-    void viewCustomers()
+
+    // Returns true if the customer was found and updated, false otherwise.
+    bool editCustomer(int id, const string &newName, const string &newPhone)
+    {
+        CustomerNode *node = findNode(id);
+        if (node == nullptr)
+            return false;
+
+        node->data.name = newName;
+        node->data.phone = newPhone;
+        saveCustomers();
+        return true;
+    }
+
+    // Returns true if the customer was found and removed, false otherwise.
+    bool deleteCustomer(int id)
+    {
+        CustomerNode *current = findNode(id);
+        if (current == nullptr)
+            return false;
+
+        // Re-link neighbours (need the previous node, since it's a singly linked list)
+        if (current == head)
+        {
+            head = head->next;
+            if (head == nullptr)
+                tail = nullptr;
+        }
+        else
+        {
+            CustomerNode *prev = head;
+            while (prev->next != current)
+                prev = prev->next;
+
+            prev->next = current->next;
+            if (current == tail)
+                tail = prev;
+        }
+
+        delete current;
+        saveCustomers();
+        return true;
+    }
+
+    // =====================================================================
+    // Display (pure output - reading the list back is not "input", so this
+    // stays here just like CategoryList::viewCategories())
+    // =====================================================================
+
+    void viewCustomers() const
     {
         if (head == nullptr)
         {
@@ -175,97 +310,9 @@ class CustomerList {
 
         cout << "--------------------------------------------------" << endl;
         cout << "Total Customers: " << count << endl;
-        cout << "--------------------------------------------------\n" << endl;
+        cout << "--------------------------------------------------\n"
+             << endl;
     }
-
-    void editCustomer()
-    {
-        if (head == nullptr)
-        {
-            cout << "\n[Info] No customers available to edit.\n";
-            return;
-        }
-
-        int targetId;
-        cout << "\nEnter Customer ID to edit: ";
-        cin >> targetId;
-
-        CustomerNode *temp = head;
-        while (temp != nullptr)
-        {
-            if (temp->data.id == targetId)
-            {
-                cout << "\n[Current Details] Name: " << temp->data.name 
-                     << " | Phone: " << temp->data.phone << "\n";
-
-                cin.ignore();
-                cout << "Enter New Name: ";
-                getline(cin, temp->data.name);
-
-                cout << "Enter New Phone Number: ";
-                cin >> temp->data.phone;
-
-                saveCustomers();
-                cout << "[Success] Customer updated successfully.\n";
-                return;
-            }
-            temp = temp->next;
-        }
-
-        cout << "[Error] Customer ID " << targetId << " not found.\n";
-    }
-
-    void deleteCustomer()
-    {
-        if (head == nullptr)
-        {
-            cout << "\n[Info] No customers available to delete.\n";
-            return;
-        }
-
-        int targetId;
-        cout << "\nEnter Customer ID to delete: ";
-        cin >> targetId;
-
-        CustomerNode *current = head;
-        CustomerNode *prev = nullptr;
-
-        while (current != nullptr)
-        {
-            if (current->data.id == targetId)
-            {
-                // Deleting the head node
-                if (current == head)
-                {
-                    head = head->next;
-                    if (head == nullptr)
-                    {
-                        tail = nullptr;
-                    }
-                }
-                else
-                {
-                    prev->next = current->next;
-                    // Deleting the tail node
-                    if (current == tail)
-                    {
-                        tail = prev;
-                    }
-                }
-
-                delete current;
-                saveCustomers();
-                cout << "[Success] Customer ID " << targetId << " deleted successfully.\n";
-                return;
-            }
-
-            prev = current;
-            current = current->next;
-        }
-
-        cout << "[Error] Customer ID " << targetId << " not found.\n";
-    }
-
 };
 
-#endif 
+#endif
