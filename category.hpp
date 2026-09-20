@@ -1,5 +1,5 @@
-#ifndef categoryt_hpp
-#define categoryt_hpp
+#ifndef category_hpp
+#define category_hpp
 
 #include <iostream>
 #include <fstream>
