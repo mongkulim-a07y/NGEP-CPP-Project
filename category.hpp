@@ -4,8 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <string>
 #include <iomanip>
+#include <string>
 #include "type.h"
 using namespace std;
 
@@ -28,7 +28,8 @@ public:
     {
         loadCategories();
     }
-    ~CategoryList() {
+    ~CategoryList()
+    {
         freeCategory();
     }
 
@@ -242,7 +243,20 @@ public:
         }
         return count;
     }
-};
 
+    // Returns a pointer to the category, or nullptr if not found. Lets a
+    // caller (e.g. a delete confirmation prompt) show details before acting.
+    Category *findCategory(int id) const
+    {
+        CategoryNode *current = head;
+        while (current != nullptr)
+        {
+            if (current->data.id == id)
+                return &current->data;
+            current = current->next;
+        }
+        return nullptr;
+    }
+};
 
 #endif

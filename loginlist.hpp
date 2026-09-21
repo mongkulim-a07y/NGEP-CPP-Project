@@ -183,6 +183,21 @@ public:
         return nullptr;
     }
 
+    // Look up the login belonging to a specific customer (tag == "customer"
+    // and matching id). Used when deleting a customer, so their login can
+    // be removed too instead of being left behind as an orphan.
+    User *findUserByCustomerId(int customerId)
+    {
+        UserNode *temp = head;
+        while (temp != nullptr)
+        {
+            if (temp->data.tag == "customer" && temp->data.id == customerId)
+                return &temp->data;
+            temp = temp->next;
+        }
+        return nullptr;
+    }
+
     // 5. LOGIN: Check credentials. Returns pointer to the user on success, nullptr on failure.
     User *login(const string &username, const string &password)
     {

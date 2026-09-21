@@ -1,6 +1,5 @@
 id,name,categoryId,price,stock
-1,Keyboard,1,25.5,0
+1,Keyboard,1,25.5,10
 2,Mouse,1,12.99,30
 3,Monitor,2,199.99,5
-5,Beer,4,44444,444
-6,Coca,6,2,50
+5,Beer,4,44444,4444

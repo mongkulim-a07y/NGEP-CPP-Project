@@ -204,6 +204,53 @@ public:
         return orderId;
     }
 
+    // Returns a pointer to the order, or nullptr if not found. Lets a
+    // caller (e.g. a cancel confirmation prompt) show details before acting.
+    Order *findOrder(int id) const
+    {
+        OrderNode *current = orderHead;
+        while (current != nullptr)
+        {
+            if (current->data.id == id)
+                return &current->data;
+            current = current->next;
+        }
+        return nullptr;
+    }
+
+    // Removes an order by id. On success, fills outProductId/outQuantity so
+    // the caller can restore stock if it wants to (see promptCancelOrder()
+    // in main.cpp). Returns false if the order id wasn't found.
+    bool deleteOrder(int id, int &outProductId, int &outQuantity)
+    {
+        OrderNode *current = orderHead;
+        OrderNode *prev = nullptr;
+
+        while (current != nullptr && current->data.id != id)
+        {
+            prev = current;
+            current = current->next;
+        }
+
+        if (current == nullptr)
+            return false;
+
+        outProductId = current->data.productId;
+        outQuantity = current->data.quantity;
+
+        if (prev == nullptr)
+            orderHead = current->next;
+        else
+            prev->next = current->next;
+
+        if (current == orderTail)
+            orderTail = prev;
+
+        delete current;
+        saveOrders();
+        return true;
+    }
+
     // view all orders from csv file
     void viewAllOrders() const
     {
