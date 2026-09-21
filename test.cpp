@@ -59,32 +59,103 @@ string getStringInput(const string &prompt)
     return str;
 }
 
-void promptAddProduct()
+// promptAddProduct gathers input, calls the pure-data addProduct(), and
+// prints the confirmation. Matches promptAddCategory/promptAddCustomer.
+void promptAddProduct(ProductList &productApp)
 {
     string name = getStringInput("Enter Product Name: ");
     int categoryId = getIntInput("Enter Category ID: ");
     double price = getDoubleInput("Enter Price: ");
     int stock = getIntInput("Enter Stock: ");
-    addProduct(name, categoryId, price, stock);
-    saveProducts();
+
+    int id = productApp.addProduct(name, categoryId, price, stock);
+    cout << "Product added with id " << id << endl;
+    productApp.saveProducts();
 }
 
-void promptEditProduct()
+void promptEditProduct(ProductList &productApp)
 {
     int id = getIntInput("Enter Product ID to edit: ");
+
+    Product *existing = productApp.findProduct(id);
+    if (existing == nullptr)
+    {
+        cout << "Product " << id << " not found" << endl;
+        return;
+    }
+
     string name = getStringInput("Enter New Name: ");
     int categoryId = getIntInput("Enter New Category ID: ");
     double price = getDoubleInput("Enter New Price: ");
     int stock = getIntInput("Enter New Stock: ");
-    editProduct(id, name, categoryId, price, stock);
-    saveProducts();
+
+    if (productApp.editProduct(id, name, categoryId, price, stock))
+    {
+        cout << "Product " << id << " updated" << endl;
+        productApp.saveProducts();
+    }
+    else
+    {
+        cout << "Product " << id << " not found" << endl;
+    }
 }
 
-void promptDeleteProduct()
+void promptDeleteProduct(ProductList &productApp)
 {
     int id = getIntInput("Enter Product ID to delete: ");
-    deleteProduct(id);
-    saveProducts();
+
+    if (productApp.deleteProduct(id))
+    {
+        cout << "Product " << id << " deleted" << endl;
+        productApp.saveProducts();
+    }
+    else
+    {
+        cout << "Product " << id << " not found" << endl;
+    }
+}
+
+// promptPlaceOrder gathers input, checks the product exists and has enough
+// stock, and only THEN places the order and reduces stock. This is the fix
+// for orders not syncing with product stock - previously OrderList::placeOrder
+// took a product id/quantity straight from cin with no connection to
+// ProductList at all, so it could "sell" a product that didn't exist or
+// oversell stock with no check.
+void promptPlaceOrder(OrderList &orderApp, ProductList &productApp, int customerId)
+{
+    int productId = getIntInput("Enter Product ID: ");
+    int quantity = getIntInput("Enter Quantity: ");
+
+    Product *prod = productApp.findProduct(productId);
+    if (prod == nullptr)
+    {
+        cout << "[Error] Product ID " << productId << " not found.\n";
+        return;
+    }
+
+    if (quantity <= 0)
+    {
+        cout << "[Error] Quantity must be greater than 0.\n";
+        return;
+    }
+
+    if (quantity > prod->stock)
+    {
+        cout << "[Error] Insufficient stock. Available: " << prod->stock
+             << ", Requested: " << quantity << ".\n";
+        return;
+    }
+
+    int orderId = orderApp.placeOrder(customerId, productId, quantity);
+
+    // Reducing stock and placing the order happen right next to each other
+    // here (not hidden inside either class), so it's obvious they're always
+    // done together.
+    productApp.reduceStock(productId, quantity);
+    productApp.saveProducts();
+
+    cout << "[Success] Order ID " << orderId << " placed successfully for "
+         << quantity << " x \"" << prod->name << "\".\n";
 }
 
 void promptAddCategory(CategoryList &category)
@@ -168,7 +239,7 @@ void promptDeleteCustomer(CustomerList &customerApp)
         cout << "[Error] Customer ID " << id << " not found.\n";
 }
 
-void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp, ProductList &productApp, LoginList &users)
 {
     int choice;
     do
@@ -196,9 +267,11 @@ void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &
         cout << " 14. View All Orders\n";
         cout << " 15. View Orders by Customer\n";
         cout << " 16. Place Order\n";
+        cout << "  Login History\n";
+        cout << " 17. View Login History\n";
         cout << "  0. Logout\n";
         cout << "--------------------------------------------------\n";
-        choice = getIntInput("Choose (0-16): ");
+        choice = getIntInput("Choose (0-17): ");
 
         switch (choice)
         {
@@ -215,19 +288,19 @@ void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &
             promptDeleteCategory(category);
             break;
         case 5:
-            viewProducts();
+            productApp.viewProducts();
             break;
         case 6:
-            promptAddProduct();
+            promptAddProduct(productApp);
             break;
         case 7:
-            promptEditProduct();
+            promptEditProduct(productApp);
             break;
         case 8:
-            promptDeleteProduct();
+            promptDeleteProduct(productApp);
             break;
         case 9:
-            sortByPrice();
+            productApp.sortByPrice();
             break;
         case 10:
             customerApp.viewCustomers();
@@ -253,9 +326,12 @@ void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &
         case 16:
         {
             int cid = getIntInput("Enter Customer ID: ");
-            orderApp.placeOrder(cid);
+            promptPlaceOrder(orderApp, productApp, cid);
             break;
         }
+        case 17:
+            users.viewLoginHistory();
+            break;
         case 0:
             cout << "Logging out...\n";
             break;
@@ -265,7 +341,7 @@ void runOwnerMenu(CustomerList &customerApp, CategoryList &category, OrderList &
     } while (choice != 0);
 }
 
-void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp, ProductList &productApp)
 {
     int choice;
     do
@@ -291,16 +367,16 @@ void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderLis
         switch (choice)
         {
         case 1:
-            viewProducts();
+            productApp.viewProducts();
             break;
         case 2:
-            sortByPrice();
+            productApp.sortByPrice();
             break;
         case 3:
-            promptAddProduct();
+            promptAddProduct(productApp);
             break;
         case 4:
-            promptEditProduct();
+            promptEditProduct(productApp);
             break;
         case 5:
             category.viewCategories();
@@ -317,7 +393,7 @@ void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderLis
         case 9:
         {
             int cid = getIntInput("Enter Customer ID: ");
-            orderApp.placeOrder(cid);
+            promptPlaceOrder(orderApp, productApp, cid);
             break;
         }
         case 10:
@@ -342,7 +418,7 @@ void runEmployeeMenu(CustomerList &customerApp, CategoryList &category, OrderLis
 // the customer to type their own ID at every step (they already proved who
 // they are at login). "Register Account" was removed from here since
 // registration now happens on the front screen, before login.
-void runCustomerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp, int customerId)
+void runCustomerMenu(CustomerList &customerApp, CategoryList &category, OrderList &orderApp, ProductList &productApp, int customerId)
 {
     int choice;
     do
@@ -362,17 +438,16 @@ void runCustomerMenu(CustomerList &customerApp, CategoryList &category, OrderLis
         switch (choice)
         {
         case 1:
-            viewProducts();
+            productApp.viewProducts();
             break;
         case 2:
-            sortByPrice();
-            viewProducts();
+            productApp.sortByPrice();
             break;
         case 3:
             category.viewCategories();
             break;
         case 4:
-            orderApp.placeOrder(customerId);
+            promptPlaceOrder(orderApp, productApp, customerId);
             break;
         case 5:
             orderApp.viewOrdersByCustomer(customerId);
@@ -387,26 +462,26 @@ void runCustomerMenu(CustomerList &customerApp, CategoryList &category, OrderLis
 }
 
 // Routes a logged-in user to the correct menu based on their tag.
-void dispatchByRole(User *loggedInUser, CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+void dispatchByRole(User *loggedInUser, CustomerList &customerApp, CategoryList &category, OrderList &orderApp, ProductList &productApp, LoginList &users)
 {
     if (loggedInUser->tag == "admin")
-        runOwnerMenu(customerApp, category, orderApp);
+        runOwnerMenu(customerApp, category, orderApp, productApp, users);
     else if (loggedInUser->tag == "staff")
-        runEmployeeMenu(customerApp, category, orderApp);
+        runEmployeeMenu(customerApp, category, orderApp, productApp);
     else if (loggedInUser->tag == "customer")
-        runCustomerMenu(customerApp, category, orderApp, loggedInUser->id);
+        runCustomerMenu(customerApp, category, orderApp, productApp, loggedInUser->id);
     else
         cout << "Unknown role. Please contact an administrator.\n";
 }
 
-void handleLogin(LoginList &users, CustomerList &customerApp, CategoryList &category, OrderList &orderApp)
+void handleLogin(LoginList &users, CustomerList &customerApp, CategoryList &category, OrderList &orderApp, ProductList &productApp)
 {
     string username = getStringInput("Username: ");
     string password = getStringInput("Password: ");
 
     User *loggedInUser = users.login(username, password); // prints its own success/failure message
     if (loggedInUser != nullptr)
-        dispatchByRole(loggedInUser, customerApp, category, orderApp);
+        dispatchByRole(loggedInUser, customerApp, category, orderApp, productApp, users);
 }
 
 // Registration is customer-only here: admin/staff accounts are assumed to be
@@ -442,8 +517,8 @@ int main()
     CustomerList customerApp;
     OrderList orderApp;
     CategoryList category;
-    LoginList users; // manages CsvFile/users.csv (credentials + role)
-    loadProducts();
+    LoginList users;        // manages CsvFile/users.csv (credentials + role)
+    ProductList productApp; // manages CsvFile/product.csv (loads itself in its constructor)
 
     int choice;
     do
@@ -460,14 +535,15 @@ int main()
         switch (choice)
         {
         case 1:
-            handleLogin(users, customerApp, category, orderApp);
+            handleLogin(users, customerApp, category, orderApp, productApp);
             break;
         case 2:
             handleRegister(users, customerApp);
             break;
         case 3:
-            saveProducts();
-            freeAllProducts();
+            productApp.saveProducts();
+            // productApp's own destructor frees its memory automatically
+            // when it goes out of scope below - no manual cleanup call needed.
             cout << "Goodbye!\n";
             break;
         default:

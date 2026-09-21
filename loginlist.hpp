@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <iomanip>
+#include <ctime>
 using namespace std;
 
 // If you already have a User struct in type.h, remove this block
@@ -14,9 +15,9 @@ struct User
 {
     string username;
     string password; // NOTE: stored in plain text here, same as Category's CSV style.
-                      // For anything beyond a class project, hash this before saving.
-    string tag;       // "admin", "staff", or "customer"
-    int id;           // only meaningful when tag == "customer" (0 otherwise)
+                     // For anything beyond a class project, hash this before saving.
+    string tag;      // "admin", "staff", or "customer"
+    int id;          // only meaningful when tag == "customer" (0 otherwise)
 };
 
 class LoginList
@@ -32,6 +33,8 @@ private:
 
     UserNode *head;
     UserNode *tail;
+
+    static constexpr const char *HISTORY_CSV_PATH = "CsvFile/loginHistory.csv";
 
 public:
     LoginList() : head(nullptr), tail(nullptr)
@@ -195,7 +198,92 @@ public:
             return nullptr;
         }
         cout << "Login successful! Welcome, " << u->username << " (" << u->tag << ")\n";
+        logLoginHistory(u->username, u->tag);
         return u;
+    }
+
+    // Returns the current date and time as "YYYY-MM-DD HH:MM:SS",
+    // same format/approach as OrderList::getCurrentDateTime().
+    string getCurrentDateTime() const
+    {
+        time_t now = time(0);
+        tm *ltm = localtime(&now);
+
+        char buffer[20];
+        strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", ltm);
+
+        return string(buffer);
+    }
+
+    // Appends one row to CsvFile/loginHistory.csv for a successful login.
+    // This is an append-only audit log, not an in-memory list like the
+    // users themselves: nothing here is ever edited or deleted, so there's
+    // no need to load it into memory or track it with a linked list.
+    void logLoginHistory(const string &username, const string &tag)
+    {
+        // Only write the header once, the first time the file is created.
+        ifstream check(HISTORY_CSV_PATH);
+        bool needsHeader = !check.good();
+        check.close();
+
+        ofstream file(HISTORY_CSV_PATH, ios::app);
+        if (!file.is_open())
+        {
+            cout << "[Error] Could not open " << HISTORY_CSV_PATH << " to log login history.\n";
+            return;
+        }
+
+        if (needsHeader)
+            file << "Username,Tag,DateTime\n";
+
+        file << username << "," << tag << "," << getCurrentDateTime() << "\n";
+        file.close();
+    }
+
+    // Displays every recorded login, oldest first. Read-only, no CRUD -
+    // matches the "audit log" nature of this data.
+    void viewLoginHistory() const
+    {
+        ifstream file(HISTORY_CSV_PATH);
+        if (!file.is_open())
+        {
+            cout << "\n[Info] No login history found yet.\n";
+            return;
+        }
+
+        cout << "\n--------------------------------------------------\n";
+        cout << setw(30) << "LOGIN HISTORY" << "\n";
+        cout << "--------------------------------------------------\n";
+        cout << left << setw(20) << "Username"
+             << setw(10) << "Tag"
+             << setw(20) << "Date & Time" << "\n";
+        cout << "--------------------------------------------------\n";
+
+        string line;
+        int count = 0;
+        while (getline(file, line))
+        {
+            if (line.empty())
+                continue;
+
+            stringstream ss(line);
+            string username, tag, datetime;
+            if (getline(ss, username, ',') && getline(ss, tag, ',') && getline(ss, datetime))
+            {
+                if (username == "Username") // skip header row
+                    continue;
+
+                cout << left << setw(20) << username
+                     << setw(10) << tag
+                     << setw(20) << datetime << "\n";
+                count++;
+            }
+        }
+        file.close();
+
+        cout << "--------------------------------------------------\n";
+        cout << "Total Logins Recorded: " << count << "\n";
+        cout << "--------------------------------------------------\n";
     }
 
     // 6. EDIT: Update password and/or tag for an existing user
