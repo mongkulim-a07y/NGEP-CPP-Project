@@ -250,7 +250,7 @@ static void DrawCategorySection(Rectangle area, CategoryList &categories)
 // Owner Dashboard - Product section
 // =============================================================================
 
-static void DrawProductSection(Rectangle area, ProductList &products)
+static void DrawProductSection(Rectangle area, ProductList &products, CategoryList &categories)
 {
     enum
     {
@@ -270,6 +270,22 @@ static void DrawProductSection(Rectangle area, ProductList &products)
     static int editingId = -1;
     static string statusMsg;
     static ConfirmState confirm;
+
+    // Category dropdown (picker) state - a convenience for filling catBuf,
+    // not a separate source of truth. Whichever way the person sets catBuf
+    // (typing or picking), the same text field is what gets parsed on
+    // Add/Update.
+    static bool categoryDropdownEditMode = false;
+    static int categoryDropdownActive = -1;
+
+    // GuiDropdownBox's expanded list must be drawn AFTER every other
+    // control that could otherwise cover it, so lock everything else while
+    // it's open. We unlock again right before drawing the dropdown itself,
+    // at the very end of this function. See raygui's own controls_test_suite
+    // example, which uses this same Lock-draw-everything-else-then-Unlock
+    // pattern around GuiDropdownBox.
+    if (categoryDropdownEditMode)
+        GuiLock();
 
     vector<Product> items = products.getAllProducts();
 
@@ -303,8 +319,14 @@ static void DrawProductSection(Rectangle area, ProductList &products)
 
     GuiLabel({formX, fy, formW, 18}, "Category ID:");
     fy += 20;
-    if (GuiTextBox({formX, fy, formW, 28}, catBuf, sizeof(catBuf), activeField == FIELD_CAT))
+    float catTextBoxW = formW * 0.55f;
+    float catDropdownW = formW - catTextBoxW - 6;
+    if (GuiTextBox({formX, fy, catTextBoxW, 28}, catBuf, sizeof(catBuf), activeField == FIELD_CAT))
         activeField = (activeField == FIELD_CAT) ? -1 : FIELD_CAT;
+    // The dropdown itself is drawn later (see bottom of this function) so its
+    // expanded list isn't covered by the buttons/labels drawn below it - but
+    // its position is fixed here, right next to the manual text box.
+    Rectangle categoryDropdownRect = {formX + catTextBoxW + 6, fy, catDropdownW, 28};
     fy += 34;
 
     GuiLabel({formX, fy, formW, 18}, "Price:");
@@ -400,6 +422,36 @@ static void DrawProductSection(Rectangle area, ProductList &products)
         selectedIndex = -1;
         editingId = -1;
         statusMsg = "Product deleted.";
+    }
+
+    // Category dropdown, drawn LAST so its expanded list renders on top of
+    // everything above (see the comment where categoryDropdownEditMode is
+    // declared). Picking an item here just writes that category's id into
+    // catBuf - the exact same field the manual text box edits - so both
+    // ways of choosing a category stay in sync and Add/Update always reads
+    // from one place.
+    if (categoryDropdownEditMode)
+        GuiUnlock();
+
+    vector<Category> allCats = categories.getAllCategories();
+    string dropdownItems;
+    for (size_t i = 0; i < allCats.size(); i++)
+    {
+        if (i > 0)
+            dropdownItems += ";";
+        dropdownItems += to_string(allCats[i].id) + " - " + allCats[i].name;
+    }
+    if (dropdownItems.empty())
+        dropdownItems = "No categories yet";
+
+    int previousActive = categoryDropdownActive;
+    if (GuiDropdownBox(categoryDropdownRect, dropdownItems.c_str(), &categoryDropdownActive, categoryDropdownEditMode))
+        categoryDropdownEditMode = !categoryDropdownEditMode;
+
+    if (categoryDropdownActive != previousActive &&
+        categoryDropdownActive >= 0 && categoryDropdownActive < (int)allCats.size())
+    {
+        snprintf(catBuf, sizeof(catBuf), "%d", allCats[categoryDropdownActive].id);
     }
 }
 
@@ -534,7 +586,7 @@ static void DrawCustomerSection(Rectangle area, CustomerList &customers, LoginLi
 // Owner Dashboard - Order section
 // =============================================================================
 
-static void DrawOrderSection(Rectangle area, OrderList &orders, ProductList &products)
+static void DrawOrderSection(Rectangle area, OrderList &orders, ProductList &products, CustomerList &customers)
 {
     enum
     {
@@ -551,6 +603,20 @@ static void DrawOrderSection(Rectangle area, OrderList &orders, ProductList &pro
     static int scrollIndex = 0;
     static string statusMsg;
     static ConfirmState confirm;
+
+    // Customer/Product pickers (convenience for filling the same text
+    // boxes above, not a separate source of truth) - same pattern as the
+    // category dropdown in DrawProductSection.
+    static bool customerDropdownEditMode = false;
+    static int customerDropdownActive = -1;
+    static bool productDropdownEditMode = false;
+    static int productDropdownActive = -1;
+
+    // Lock everything else while either dropdown is open, for the same
+    // reason as the category dropdown - unlocked again right before both
+    // are drawn, at the very end of this function.
+    if (customerDropdownEditMode || productDropdownEditMode)
+        GuiLock();
 
     vector<Order> items = orders.getAllOrders();
 
@@ -582,14 +648,20 @@ static void DrawOrderSection(Rectangle area, OrderList &orders, ProductList &pro
 
     GuiLabel({formX, fy, formW, 18}, "Customer ID:");
     fy += 20;
-    if (GuiTextBox({formX, fy, formW, 28}, customerIdBuf, sizeof(customerIdBuf), activeField == FIELD_CUSTOMER))
+    float custTextBoxW = formW * 0.55f;
+    float custDropdownW = formW - custTextBoxW - 6;
+    if (GuiTextBox({formX, fy, custTextBoxW, 28}, customerIdBuf, sizeof(customerIdBuf), activeField == FIELD_CUSTOMER))
         activeField = (activeField == FIELD_CUSTOMER) ? -1 : FIELD_CUSTOMER;
+    Rectangle customerDropdownRect = {formX + custTextBoxW + 6, fy, custDropdownW, 28};
     fy += 34;
 
     GuiLabel({formX, fy, formW, 18}, "Product ID:");
     fy += 20;
-    if (GuiTextBox({formX, fy, formW, 28}, productIdBuf, sizeof(productIdBuf), activeField == FIELD_PRODUCT))
+    float prodTextBoxW = formW * 0.55f;
+    float prodDropdownW = formW - prodTextBoxW - 6;
+    if (GuiTextBox({formX, fy, prodTextBoxW, 28}, productIdBuf, sizeof(productIdBuf), activeField == FIELD_PRODUCT))
         activeField = (activeField == FIELD_PRODUCT) ? -1 : FIELD_PRODUCT;
+    Rectangle productDropdownRect = {formX + prodTextBoxW + 6, fy, prodDropdownW, 28};
     fy += 34;
 
     GuiLabel({formX, fy, formW, 18}, "Quantity:");
@@ -669,6 +741,69 @@ static void DrawOrderSection(Rectangle area, OrderList &orders, ProductList &pro
         }
         selectedIndex = -1;
     }
+
+    // Customer/Product pickers, drawn LAST so their expanded lists render
+    // on top of everything above (see the note where the dropdown state is
+    // declared). Picking an item writes that id into the matching text box
+    // above - the same field Place Order reads from either way.
+    if (customerDropdownEditMode || productDropdownEditMode)
+        GuiUnlock();
+
+    vector<Customer> allCustomers = customers.getAllCustomers();
+    string customerItems;
+    for (size_t i = 0; i < allCustomers.size(); i++)
+    {
+        if (i > 0)
+            customerItems += ";";
+        customerItems += to_string(allCustomers[i].id) + " - " + allCustomers[i].name;
+    }
+    if (customerItems.empty())
+        customerItems = "No customers yet";
+
+    int prevCustomerActive = customerDropdownActive;
+    if (GuiDropdownBox(customerDropdownRect, customerItems.c_str(), &customerDropdownActive, customerDropdownEditMode))
+    {
+        customerDropdownEditMode = !customerDropdownEditMode;
+        if (customerDropdownEditMode)
+            productDropdownEditMode = false; // only one dropdown open at a time
+    }
+    if (customerDropdownActive != prevCustomerActive &&
+        customerDropdownActive >= 0 && customerDropdownActive < (int)allCustomers.size())
+    {
+        snprintf(customerIdBuf, sizeof(customerIdBuf), "%d", allCustomers[customerDropdownActive].id);
+    }
+
+    // FIX: Customer's row sits ABOVE Product's row, so Customer's expanded
+    // list drops down into the space Product's box occupies. Drawing
+    // Product's box (even closed) while Customer is open makes it visually
+    // cut into Customer's open list. Skip Product entirely for this one
+    // frame instead - it reappears normally the instant Customer closes.
+    if (!customerDropdownEditMode)
+    {
+        vector<Product> allProductsForDropdown = products.getAllProducts();
+        string productItems;
+        for (size_t i = 0; i < allProductsForDropdown.size(); i++)
+        {
+            if (i > 0)
+                productItems += ";";
+            productItems += to_string(allProductsForDropdown[i].id) + " - " + allProductsForDropdown[i].name;
+        }
+        if (productItems.empty())
+            productItems = "No products yet";
+
+        int prevProductActive = productDropdownActive;
+        if (GuiDropdownBox(productDropdownRect, productItems.c_str(), &productDropdownActive, productDropdownEditMode))
+        {
+            productDropdownEditMode = !productDropdownEditMode;
+            if (productDropdownEditMode)
+                customerDropdownEditMode = false; // only one dropdown open at a time
+        }
+        if (productDropdownActive != prevProductActive &&
+            productDropdownActive >= 0 && productDropdownActive < (int)allProductsForDropdown.size())
+        {
+            snprintf(productIdBuf, sizeof(productIdBuf), "%d", allProductsForDropdown[productDropdownActive].id);
+        }
+    }
 }
 
 // =============================================================================
@@ -680,6 +815,12 @@ static void DrawOwnerDashboard(AppScreen &screen, OwnerTab &tab,
                                 CustomerList &customers, OrderList &orders,
                                 LoginList &users, Session &session)
 {
+    // Always start each frame unlocked, regardless of whether a dropdown
+    // was left open in a previous frame/section - otherwise a lock left on
+    // from, say, the Product tab's category dropdown could make the
+    // sidebar's tab buttons unresponsive after switching away from it.
+    GuiUnlock();
+
     int screenW = GetScreenWidth();
     int screenH = GetScreenHeight();
     float sidebarW = 190;
@@ -718,13 +859,13 @@ static void DrawOwnerDashboard(AppScreen &screen, OwnerTab &tab,
         DrawCategorySection(content, categories);
         break;
     case TAB_PRODUCT:
-        DrawProductSection(content, products);
+        DrawProductSection(content, products, categories);
         break;
     case TAB_CUSTOMER:
         DrawCustomerSection(content, customers, users);
         break;
     case TAB_ORDER:
-        DrawOrderSection(content, orders, products);
+        DrawOrderSection(content, orders, products, customers);
         break;
     }
 }
