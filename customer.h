@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <vector>
 using namespace std;
 
 // This class does NOT read from cin. All input-gathering (prompts) lives in
@@ -312,6 +313,18 @@ public:
         cout << "Total Customers: " << count << endl;
         cout << "--------------------------------------------------\n"
              << endl;
+    }
+
+    vector<Customer> getAllCustomers() const
+    {
+        vector<Customer> result;
+        CustomerNode *temp = head;
+        while (temp != nullptr)
+        {
+            result.push_back(temp->data);
+            temp = temp->next;
+        }
+        return result;
     }
 };
 

@@ -6,6 +6,7 @@
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <vector>
 #include "type.h"
 using namespace std;
 
@@ -256,6 +257,18 @@ public:
             current = current->next;
         }
         return nullptr;
+    }
+
+    vector<Category> getAllCategories() const
+    {
+        vector<Category> result;
+        CategoryNode *current = head;
+        while (current != nullptr)
+        {
+            result.push_back(current->data);
+            current = current->next;
+        }
+        return result;
     }
 };
 

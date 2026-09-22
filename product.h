@@ -6,6 +6,7 @@
 #include <sstream>
 #include <string>
 #include <iomanip>
+#include <vector>
 #include "type.h"
 using namespace std;
 
@@ -91,6 +92,17 @@ public:
     ProductList(const ProductList &) = delete;
     ProductList &operator=(const ProductList &) = delete;
 
+    vector<Product> getAllProducts() const
+    {
+        vector<Product> result;
+        ProductNode *temp = head;
+        while (temp != nullptr)
+        {
+            result.push_back(temp->data);
+            temp = temp->next;
+        }
+        return result;
+    }
     void freeAllProducts()
     {
         ProductNode *current = head;
@@ -383,6 +395,8 @@ private:
         }
         cout << "\n===============================================================================\n";
     }
+
+    
 };
 
 #endif

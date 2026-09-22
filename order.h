@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <ctime>
 #include <string>
+#include <vector>
 #include "type.h"
 
 using namespace std;
@@ -334,6 +335,18 @@ public:
             cout << "Total Orders for Customer #" << customerId << ": " << count << endl;
         }
         cout << "----------------------------------------------------------------------" << endl;
+    }
+
+    vector<Order> getAllOrders() const
+    {
+        vector<Order> result;
+        OrderNode *temp = orderHead;
+        while (temp != nullptr)
+        {
+            result.push_back(temp->data);
+            temp = temp->next;
+        }
+        return result;
     }
 };
 
