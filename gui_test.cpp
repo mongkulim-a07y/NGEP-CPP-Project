@@ -157,7 +157,8 @@ enum AppScreen
     SCREEN_LOGIN,
     SCREEN_REGISTER,
     SCREEN_OWNER,
-    SCREEN_STAFF
+    SCREEN_STAFF,
+    SCREEN_CUSTOMER
 };
 
 enum OwnerTab
@@ -179,6 +180,13 @@ enum StaffTab
     STAFF_TAB_CUSTOMER,
     STAFF_TAB_ORDER,
     STAFF_TAB_ACCOUNT
+};
+
+enum CustomerTab
+{
+    CUSTOMER_TAB_BROWSE_ORDER,
+    CUSTOMER_TAB_ORDERS,
+    CUSTOMER_TAB_ACCOUNT
 };
 
 // What we remember about who's currently logged in. We store copies (not a
@@ -209,6 +217,7 @@ static bool g_productModalOpen = false;
 static bool g_customerModalOpen = false;
 static bool g_orderModalOpen = false;
 static bool g_staffOrderModalOpen = false;
+static bool g_customerOrderModalOpen = false;
 
 // =============================================================================
 // Owner Dashboard - Category section
@@ -1200,6 +1209,7 @@ static void DrawOwnerDashboard(AppScreen &screen, OwnerTab &tab,
 // Owner dashboard's Order section.
 
 static void DrawStaffBrowseOrderSection(Rectangle area, ProductList &products,
+                                        CategoryList &categories,
                                         OrderList &orders, CustomerList &customers)
 {
     enum
@@ -1215,6 +1225,8 @@ static void DrawStaffBrowseOrderSection(Rectangle area, ProductList &products,
     static int scrollIndex = 0;
     static string statusMsg;
     static QuantityPromptState qp;
+    static int sortPriceActive = 0;   // 0: Default, 1: Low to High, 2: High to Low
+    static int selectedCatFilter = 0; // 0: All, or category ID
 
     static bool customerDropdownEditMode = false;
     static int customerDropdownActive = -1;
@@ -1240,9 +1252,46 @@ static void DrawStaffBrowseOrderSection(Rectangle area, ProductList &products,
     // Search box - filters the product list by name. Compared
     // case-insensitively (both sides lowercased) so typing "m" matches
     // "Mouse" - a plain find() was case-sensitive and missed it.
-    GuiLabel({x, y, 60, 18}, "Search:");
-    if (GuiTextBox({x + 70, y, 260, 26}, searchBuf, sizeof(searchBuf), activeField == FIELD_SEARCH))
+    GuiLabel({x, y, 55, 26}, "Search:");
+    if (GuiTextBox({x + 60, y, 220, 26}, searchBuf, sizeof(searchBuf), activeField == FIELD_SEARCH))
         activeField = (activeField == FIELD_SEARCH) ? -1 : FIELD_SEARCH;
+
+    // Sort by price control
+    GuiLabel({x + 300, y, 80, 26}, "Sort Price:");
+    GuiToggleGroup({x + 385, y, 75, 26}, "Default;Low-High;High-Low", &sortPriceActive);
+    y += 34;
+
+    // Category filter row with "All" and each category
+    vector<Category> allCats = categories.getAllCategories();
+    GuiLabel({x, y, 65, 26}, "Category:");
+
+    float catBtnX = x + 70;
+    bool allActive = (selectedCatFilter == 0);
+    if (GuiToggle({catBtnX, y, 50, 26}, "All", &allActive))
+    {
+        selectedCatFilter = 0;
+    }
+    catBtnX += 56;
+
+    for (size_t ci = 0; ci < allCats.size(); ci++)
+    {
+        float catW = (float)MeasureText(allCats[ci].name.c_str(), 10) + 24.0f;
+        if (catW < 60.0f)
+            catW = 60.0f;
+
+        if (catBtnX + catW > x + w - 10)
+        {
+            y += 30;
+            catBtnX = x + 70;
+        }
+
+        bool isCatActive = (selectedCatFilter == allCats[ci].id);
+        if (GuiToggle({catBtnX, y, catW, 26}, allCats[ci].name.c_str(), &isCatActive))
+        {
+            selectedCatFilter = isCatActive ? allCats[ci].id : 0;
+        }
+        catBtnX += catW + 6;
+    }
     y += 34;
 
     vector<Product> allItems = products.getAllProducts();
@@ -1255,6 +1304,9 @@ static void DrawStaffBrowseOrderSection(Rectangle area, ProductList &products,
               { return tolower(c); });
     for (size_t i = 0; i < allItems.size(); i++)
     {
+        if (selectedCatFilter != 0 && allItems[i].categoryId != selectedCatFilter)
+            continue;
+
         if (filterLower.empty())
         {
             items.push_back(allItems[i]);
@@ -1270,16 +1322,45 @@ static void DrawStaffBrowseOrderSection(Rectangle area, ProductList &products,
         }
     }
 
+    if (sortPriceActive == 1) // Low to High
+    {
+        stable_sort(items.begin(), items.end(), [](const Product &a, const Product &b) {
+            return a.price < b.price;
+        });
+    }
+    else if (sortPriceActive == 2) // High to Low
+    {
+        stable_sort(items.begin(), items.end(), [](const Product &a, const Product &b) {
+            return a.price > b.price;
+        });
+    }
+
     string listStr;
     for (size_t i = 0; i < items.size(); i++)
     {
         if (i > 0)
             listStr += ";";
-        listStr += "#" + to_string(items[i].id) + " " + items[i].name +
+
+        string catName;
+        for (size_t ci = 0; ci < allCats.size(); ci++)
+        {
+            if (allCats[ci].id == items[i].categoryId)
+            {
+                catName = allCats[ci].name;
+                break;
+            }
+        }
+        string catLabel = catName.empty() ? (" [Cat #" + to_string(items[i].categoryId) + "]")
+                                          : (" [" + catName + "]");
+
+        listStr += "#" + to_string(items[i].id) + " " + items[i].name + catLabel +
                    " ($" + FormatMoney(items[i].price) + ", stock " + to_string(items[i].stock) + ")";
     }
     if (listStr.empty())
         listStr = "No matching products";
+
+    if (selectedIndex >= (int)items.size())
+        selectedIndex = -1;
 
     Rectangle listRect = {x, y, w, area.height - (y - area.y) - 90};
     GuiListView(listRect, listStr.c_str(), &scrollIndex, &selectedIndex);
@@ -1736,7 +1817,7 @@ static void DrawStaffDashboard(AppScreen &screen, StaffTab &tab,
     switch (tab)
     {
     case STAFF_TAB_BROWSE_ORDER:
-        DrawStaffBrowseOrderSection(content, products, orders, customers);
+        DrawStaffBrowseOrderSection(content, products, categories, orders, customers);
         break;
     case STAFF_TAB_CATEGORY:
         DrawStaffCategorySection(content, categories);
@@ -1751,6 +1832,401 @@ static void DrawStaffDashboard(AppScreen &screen, StaffTab &tab,
         DrawStaffAccountSection(content, users, session);
         break;
     }
+}
+
+// =============================================================================
+// Customer Dashboard - Browse Products & Place Order
+// =============================================================================
+
+static void DrawCustomerBrowseOrderSection(Rectangle area, ProductList &products,
+                                           CategoryList &categories,
+                                           OrderList &orders, Session &session)
+{
+    enum
+    {
+        FIELD_SEARCH
+    };
+    static int activeField = -1;
+
+    static char searchBuf[64] = "";
+    static int selectedIndex = -1;
+    static int scrollIndex = 0;
+    static string statusMsg;
+    static QuantityPromptState qp;
+    static int sortPriceActive = 0;   // 0: Default, 1: Low to High, 2: High to Low
+    static int selectedCatFilter = 0; // 0: All, or category ID
+
+    g_customerOrderModalOpen = qp.open;
+
+    if (qp.open)
+        GuiLock();
+
+    float x = area.x, y = area.y, w = area.width;
+
+    GuiLabel({x, y, w, 24}, "Browse Products & Place Order");
+    y += 30;
+
+    // Search box - filters the product list by name. Compared
+    // case-insensitively (both sides lowercased) so typing "m" matches
+    // "Mouse" - a plain find() was case-sensitive and missed it.
+    GuiLabel({x, y, 55, 26}, "Search:");
+    if (GuiTextBox({x + 60, y, 220, 26}, searchBuf, sizeof(searchBuf), activeField == FIELD_SEARCH))
+        activeField = (activeField == FIELD_SEARCH) ? -1 : FIELD_SEARCH;
+
+    // Sort by price control
+    GuiLabel({x + 300, y, 80, 26}, "Sort Price:");
+    GuiToggleGroup({x + 385, y, 75, 26}, "Default;Low-High;High-Low", &sortPriceActive);
+    y += 34;
+
+    // Category filter row with "All" and each category
+    vector<Category> allCats = categories.getAllCategories();
+    GuiLabel({x, y, 65, 26}, "Category:");
+
+    float catBtnX = x + 70;
+    bool allActive = (selectedCatFilter == 0);
+    if (GuiToggle({catBtnX, y, 50, 26}, "All", &allActive))
+    {
+        selectedCatFilter = 0;
+    }
+    catBtnX += 56;
+
+    for (size_t ci = 0; ci < allCats.size(); ci++)
+    {
+        float catW = (float)MeasureText(allCats[ci].name.c_str(), 10) + 24.0f;
+        if (catW < 60.0f)
+            catW = 60.0f;
+
+        if (catBtnX + catW > x + w - 10)
+        {
+            y += 30;
+            catBtnX = x + 70;
+        }
+
+        bool isCatActive = (selectedCatFilter == allCats[ci].id);
+        if (GuiToggle({catBtnX, y, catW, 26}, allCats[ci].name.c_str(), &isCatActive))
+        {
+            selectedCatFilter = isCatActive ? allCats[ci].id : 0;
+        }
+        catBtnX += catW + 6;
+    }
+    y += 34;
+
+    vector<Product> allItems = products.getAllProducts();
+    vector<Product> items;
+    string filter(searchBuf);
+
+    string filterLower = filter;
+    transform(filterLower.begin(), filterLower.end(), filterLower.begin(),
+              [](unsigned char c)
+              { return tolower(c); });
+    for (size_t i = 0; i < allItems.size(); i++)
+    {
+        if (selectedCatFilter != 0 && allItems[i].categoryId != selectedCatFilter)
+            continue;
+
+        if (filterLower.empty())
+        {
+            items.push_back(allItems[i]);
+        }
+        else
+        {
+            string nameLower = allItems[i].name;
+            transform(nameLower.begin(), nameLower.end(), nameLower.begin(),
+                      [](unsigned char c)
+                      { return tolower(c); });
+            if (nameLower.find(filterLower) != string::npos)
+                items.push_back(allItems[i]);
+        }
+    }
+
+    if (sortPriceActive == 1) // Low to High
+    {
+        stable_sort(items.begin(), items.end(), [](const Product &a, const Product &b) {
+            return a.price < b.price;
+        });
+    }
+    else if (sortPriceActive == 2) // High to Low
+    {
+        stable_sort(items.begin(), items.end(), [](const Product &a, const Product &b) {
+            return a.price > b.price;
+        });
+    }
+
+    string listStr;
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        if (i > 0)
+            listStr += ";";
+
+        string catName;
+        for (size_t ci = 0; ci < allCats.size(); ci++)
+        {
+            if (allCats[ci].id == items[i].categoryId)
+            {
+                catName = allCats[ci].name;
+                break;
+            }
+        }
+        string catLabel = catName.empty() ? (" [Cat #" + to_string(items[i].categoryId) + "]")
+                                          : (" [" + catName + "]");
+
+        listStr += "#" + to_string(items[i].id) + " " + items[i].name + catLabel +
+                   " ($" + FormatMoney(items[i].price) + ", stock " + to_string(items[i].stock) + ")";
+    }
+    if (listStr.empty())
+        listStr = "No matching products";
+
+    if (selectedIndex >= (int)items.size())
+        selectedIndex = -1;
+
+    Rectangle listRect = {x, y, w, area.height - (y - area.y) - 90};
+    GuiListView(listRect, listStr.c_str(), &scrollIndex, &selectedIndex);
+    float belowListY = listRect.y + listRect.height + 10;
+
+    if (selectedIndex >= 0 && selectedIndex < (int)items.size())
+    {
+        if (GuiButton({x, belowListY, 200, 32}, "Order This"))
+        {
+            qp.open = true;
+            g_customerOrderModalOpen = true;
+            qp.productId = items[selectedIndex].id;
+            qp.productName = items[selectedIndex].name;
+            qp.availableStock = items[selectedIndex].stock;
+            qp.quantityBuf[0] = '\0';
+        }
+    }
+    belowListY += 40;
+
+    if (!statusMsg.empty())
+        GuiLabel({x, belowListY, w, 34}, statusMsg.c_str());
+
+    if (qp.open)
+        GuiUnlock();
+
+    int qpResult = DrawQuantityPromptModal(qp);
+    if (qpResult == 1)
+    {
+        try
+        {
+            int quantity = stoi(string(qp.quantityBuf));
+            Product *prod = products.findProduct(qp.productId);
+
+            if (prod == nullptr)
+            {
+                statusMsg = "That product is no longer available.";
+            }
+            else if (quantity <= 0)
+            {
+                statusMsg = "Quantity must be greater than 0.";
+            }
+            else if (quantity > prod->stock)
+            {
+                statusMsg = "Insufficient stock. Available: " + to_string(prod->stock) +
+                            ", Requested: " + to_string(quantity) + ".";
+            }
+            else
+            {
+                int orderId = orders.placeOrder(session.customerId, qp.productId, quantity);
+                products.reduceStock(qp.productId, quantity);
+                products.saveProducts();
+                statusMsg = "Order #" + to_string(orderId) + " placed for " +
+                            to_string(quantity) + " x \"" + prod->name + "\".";
+            }
+        }
+        catch (...)
+        {
+            statusMsg = "Quantity must be a valid number.";
+        }
+    }
+    else if (qpResult == 2)
+    {
+        statusMsg = "Order cancelled.";
+    }
+    g_customerOrderModalOpen = qp.open;
+}
+
+// =============================================================================
+// Customer Dashboard - My Orders (read-only, filtered to current customer)
+// =============================================================================
+
+static void DrawCustomerOrdersSection(Rectangle area, OrderList &orders, Session &session)
+{
+    static int scrollIndex = 0;
+    int dummyActive = -1; // view only - customer does not cancel orders here
+
+    float x = area.x, y = area.y, w = area.width;
+    GuiLabel({x, y, w, 24}, "My Orders");
+    y += 30;
+
+    vector<Order> allItems = orders.getAllOrders();
+    vector<Order> items;
+    for (size_t i = 0; i < allItems.size(); i++)
+    {
+        if (allItems[i].customerId == session.customerId)
+            items.push_back(allItems[i]);
+    }
+
+    string listStr;
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        if (i > 0)
+            listStr += ";";
+
+        listStr += "#" + to_string(items[i].id) +
+                   " - Prod " + to_string(items[i].productId) + " x" + to_string(items[i].quantity) +
+                   " (" + items[i].date + ")";
+    }
+    if (listStr.empty())
+        listStr = "No orders yet";
+
+    Rectangle listRect = {x, y, w, area.height - (y - area.y) - 10};
+    GuiListView(listRect, listStr.c_str(), &scrollIndex, &dummyActive);
+}
+
+// =============================================================================
+// Customer Dashboard - Account (Change Password only)
+// =============================================================================
+
+static void DrawCustomerAccountSection(Rectangle area, LoginList &users, Session &session)
+{
+    enum
+    {
+        FIELD_CURRENT,
+        FIELD_NEWPASS,
+        FIELD_CONFIRM
+    };
+    static int activeField = -1;
+
+    static char currentPassBuf[64] = "";
+    static char newPassBuf[64] = "";
+    static char confirmPassBuf[64] = "";
+    static string statusMsg;
+
+    float x = area.x, y = area.y;
+    float boxW = 360;
+
+    GuiGroupBox({x, y, boxW, 220}, "Change Password");
+    float cpx = x + 15, cpy = y + 20, cpw = boxW - 30;
+
+    GuiLabel({cpx, cpy, cpw, 18}, "Current Password:");
+    cpy += 20;
+    if (GuiTextBox({cpx, cpy, cpw, 26}, currentPassBuf, sizeof(currentPassBuf), activeField == FIELD_CURRENT))
+        activeField = (activeField == FIELD_CURRENT) ? -1 : FIELD_CURRENT;
+    cpy += 32;
+
+    GuiLabel({cpx, cpy, cpw, 18}, "New Password:");
+    cpy += 20;
+    if (GuiTextBox({cpx, cpy, cpw, 26}, newPassBuf, sizeof(newPassBuf), activeField == FIELD_NEWPASS))
+        activeField = (activeField == FIELD_NEWPASS) ? -1 : FIELD_NEWPASS;
+    cpy += 32;
+
+    GuiLabel({cpx, cpy, cpw, 18}, "Confirm New Password:");
+    cpy += 20;
+    if (GuiTextBox({cpx, cpy, cpw, 26}, confirmPassBuf, sizeof(confirmPassBuf), activeField == FIELD_CONFIRM))
+        activeField = (activeField == FIELD_CONFIRM) ? -1 : FIELD_CONFIRM;
+    cpy += 34;
+
+    if (GuiButton({cpx, cpy, cpw, 28}, "Update Password"))
+    {
+        User *u = users.findUser(session.username);
+        string currentPass(currentPassBuf), newPass(newPassBuf), confirmPass(confirmPassBuf);
+
+        if (u == nullptr || u->password != currentPass)
+        {
+            statusMsg = "Current password is incorrect.";
+        }
+        else if (newPass.empty())
+        {
+            statusMsg = "New password cannot be empty.";
+        }
+        else if (newPass != confirmPass)
+        {
+            statusMsg = "New passwords do not match.";
+        }
+        else
+        {
+            users.editUser(session.username, newPass, u->tag);
+            statusMsg = "Password changed successfully.";
+            currentPassBuf[0] = '\0';
+            newPassBuf[0] = '\0';
+            confirmPassBuf[0] = '\0';
+        }
+    }
+    cpy += 32;
+    if (!statusMsg.empty())
+        GuiLabel({cpx, cpy, cpw, 34}, statusMsg.c_str());
+}
+
+// =============================================================================
+// Customer Dashboard - sidebar / tab routing
+// =============================================================================
+
+static void DrawCustomerDashboard(AppScreen &screen, CustomerTab &tab,
+                                  ProductList &products, CategoryList &categories,
+                                  CustomerList &customers, OrderList &orders,
+                                  LoginList &users, Session &session)
+{
+    (void)customers;
+    // Same reasoning as DrawOwnerDashboard: always start unlocked so a
+    // dropdown left open on a previous tab can't freeze the sidebar.
+    GuiUnlock();
+
+    int screenW = GetScreenWidth();
+    int screenH = GetScreenHeight();
+    float sidebarW = 190;
+
+    // Only the Browse & Order tab has a modal (the quantity prompt).
+    // Lock the sidebar before drawing it if a modal is open.
+    bool modalOpenForActiveTab = (tab == CUSTOMER_TAB_BROWSE_ORDER) && g_customerOrderModalOpen;
+    if (modalOpenForActiveTab)
+        GuiLock();
+
+    GuiPanel({0, 0, sidebarW, (float)screenH}, "Customer Menu");
+
+    float by = 40;
+    if (GuiButton({10, by, sidebarW - 20, 32}, "Browse & Order"))
+        tab = CUSTOMER_TAB_BROWSE_ORDER;
+    by += 40;
+    if (GuiButton({10, by, sidebarW - 20, 32}, "My Orders"))
+        tab = CUSTOMER_TAB_ORDERS;
+    by += 40;
+    if (GuiButton({10, by, sidebarW - 20, 32}, "Account"))
+        tab = CUSTOMER_TAB_ACCOUNT;
+
+    by = (float)screenH - 80;
+    GuiLabel({10, by, sidebarW - 20, 20}, ("User: " + session.username).c_str());
+    by += 24;
+    if (GuiButton({10, by, sidebarW - 20, 32}, "Logout"))
+    {
+        screen = SCREEN_LOGIN;
+        session.username.clear();
+        session.tag.clear();
+        session.customerId = 0;
+    }
+
+    Rectangle content = {sidebarW + 20, 20, (float)screenW - sidebarW - 40, (float)screenH - 40};
+
+    switch (tab)
+    {
+    case CUSTOMER_TAB_BROWSE_ORDER:
+        DrawCustomerBrowseOrderSection(content, products, categories, orders, session);
+        break;
+    case CUSTOMER_TAB_ORDERS:
+        DrawCustomerOrdersSection(content, orders, session);
+        break;
+    case CUSTOMER_TAB_ACCOUNT:
+        DrawCustomerAccountSection(content, users, session);
+        break;
+    }
+}
+
+static void DrawCustomerDashboard(AppScreen &screen, CustomerTab &tab,
+                                  ProductList &products, OrderList &orders,
+                                  LoginList &users, Session &session)
+{
+    CategoryList categories;
+    CustomerList customers;
+    DrawCustomerDashboard(screen, tab, products, categories, customers, orders, users, session);
 }
 
 // =============================================================================
@@ -1812,9 +2288,13 @@ static void DrawLoginScreen(AppScreen &screen, LoginList &users, Session &sessio
                 statusMsg = "";
                 screen = SCREEN_STAFF;
             }
+            else if (u->tag == "customer")
+            {
+                statusMsg = "";
+                screen = SCREEN_CUSTOMER;
+            }
             else
             {
-                // Only Owner and Staff dashboards exist in this GUI pass.
                 statusMsg = "Logged in as \"" + u->tag + "\" - no dashboard is built for that role yet.";
             }
         }
@@ -1967,6 +2447,7 @@ int main()
     AppScreen screen = SCREEN_LOGIN;
     OwnerTab tab = TAB_CATEGORY;
     StaffTab staffTab = STAFF_TAB_BROWSE_ORDER;
+    CustomerTab customerTab = CUSTOMER_TAB_BROWSE_ORDER;
     Session session;
 
     while (!WindowShouldClose())
@@ -1987,6 +2468,9 @@ int main()
             break;
         case SCREEN_STAFF:
             DrawStaffDashboard(screen, staffTab, products, categories, customers, orders, users, session);
+            break;
+        case SCREEN_CUSTOMER:
+            DrawCustomerDashboard(screen, customerTab, products, categories, customers, orders, users, session);
             break;
         }
 
