@@ -7,6 +7,7 @@
 #include <string>
 #include <iomanip>
 #include <ctime>
+#include <vector>
 using namespace std;
 
 // If you already have a User struct in type.h, remove this block
@@ -18,6 +19,13 @@ struct User
                      // For anything beyond a class project, hash this before saving.
     string tag;      // "admin", "staff", or "customer"
     int id;          // only meaningful when tag == "customer" (0 otherwise)
+};
+
+struct LoginHistoryEntry
+{
+    string username;
+    string tag;
+    string datetime;
 };
 
 class LoginList
@@ -253,6 +261,40 @@ public:
 
         file << username << "," << tag << "," << getCurrentDateTime() << "\n";
         file.close();
+    }
+
+    // Returns every recorded login as data, oldest first. Needed by
+    // anything that needs to enumerate the log (e.g. a GUI list) rather
+    // than just print it via viewLoginHistory().
+    vector<LoginHistoryEntry> getLoginHistory() const
+    {
+        vector<LoginHistoryEntry> result;
+        ifstream file(HISTORY_CSV_PATH);
+        if (!file.is_open())
+            return result;
+
+        string line;
+        while (getline(file, line))
+        {
+            if (line.empty())
+                continue;
+
+            stringstream ss(line);
+            string username, tag, datetime;
+            if (getline(ss, username, ',') && getline(ss, tag, ',') && getline(ss, datetime))
+            {
+                if (username == "Username") // skip header row
+                    continue;
+
+                LoginHistoryEntry entry;
+                entry.username = username;
+                entry.tag = tag;
+                entry.datetime = datetime;
+                result.push_back(entry);
+            }
+        }
+        file.close();
+        return result;
     }
 
     // Displays every recorded login, oldest first. Read-only, no CRUD -
