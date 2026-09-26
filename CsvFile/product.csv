@@ -1,8 +1,10 @@
 id,name,categoryId,price,stock
-1,Keyboard,1,25.5,5
-2,Mouse,1,12.99,36
-3,Monitor,2,199.99,5
-5,Beer,4,44,4444
-6,brad,1,1,1008
-7,cocacola,2,2,932
-8,Mecheat,1,0.25,793
+1,Smartphone X10,1,699.99,118
+2,Wireless Earbuds Pro,1,149.99,250
+3,4K Ultra HD TV 55",1,1199.99,45
+4,The Great Adventure,2,19.99,300
+5,Science of Cooking,2,24.99,180
+6,Mystery of the Old House,2,14.99,220
+7,Denim Jeans,3,49.99,200
+8,Cotton T-Shirt,3,19.99,350
+9,Leather Jacket,3,199.99,80

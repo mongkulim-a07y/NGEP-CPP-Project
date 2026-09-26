@@ -1,9 +1,7 @@
 Username,Password,Tag,ID
 admin1,root,admin,0
 staff1,staffpass,staff,0
-cust1,custpass,customer,101
 fff,111,customer,1
 hh,hh,customer,2
 aa,aa,customer,3
-spmk,1111,customer,4
 root,root,admin,0
